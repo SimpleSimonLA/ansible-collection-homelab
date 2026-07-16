@@ -1,0 +1,28 @@
+---
+# Defaults der Rolle manifest_deploy. Pro Repo/Playbook ueberschreiben.
+
+# --- discover_stacks ---
+# stacks_root: (PFLICHT) Pfad zum stacks/-Verzeichnis auf dem Zielhost.
+
+# --- sync_repo ---
+# repo_url, repo_dest: (PFLICHT)
+repo_branch: main
+# repo_key_file:     (optional) SSH-Deploy-Key fuer den git-Checkout
+# repo_become_user:  (optional) User fuer den git-Checkout (z. B. homelab: simon)
+
+# --- prepare_stacks ---
+# env_in_repo=true  -> .env wird in den Stack-Ordner (<stack>/.env) gerendert (homelab).
+# env_in_repo=false -> nach services_config_root/<name>/<name>.env (hetzner-vps).
+env_in_repo: true
+services_config_root: /opt/services-config
+# Owner/Group fuer gerenderte Configs/Dirs (homelab: simon, hetzner: root).
+config_owner: root
+config_group: root
+# Verzeichnis der *.j2-Templates. Default: templates/ neben dem aufrufenden Playbook.
+# Absoluter Pfad noetig, weil ein Rollen-Task 'templates/…' sonst role-relativ auflaest.
+manifest_templates_dir: "{{ playbook_dir }}/templates"
+
+# --- notify_ntfy ---
+ntfy_enabled: false
+ntfy_user: admin
+# ntfy_url, ntfy_password: vom Caller setzen.

@@ -1,0 +1,29 @@
+---
+# Wiederverwendbarer ntfy-Notify-Task.
+# Aufruf: include_role name=appelshaeuser.stacks.manifest_deploy tasks_from=notify_ntfy
+#   vars:
+#     ntfy_title: "Deploy gestartet"
+#     ntfy_body:  "..."
+#     ntfy_tags:  rocket        # optional
+#     ntfy_priority: default    # optional
+#
+# Parametrisiert (role-defaults / Caller):
+#   ntfy_enabled  – bool; wenn false wird der Task uebersprungen.
+#   ntfy_url      – vollstaendige Ziel-URL (Caller baut sie, z. B. base ~ '/topic').
+#   ntfy_user     – Basic-Auth-User (Default 'admin').
+#   ntfy_password – Basic-Auth-Passwort (aus dem Vault).
+- name: "ntfy: {{ ntfy_title }}"
+  ansible.builtin.uri:
+    url: "{{ ntfy_url }}"
+    method: POST
+    headers:
+      Title: "{{ ntfy_title }}"
+      Priority: "{{ ntfy_priority | default('default') }}"
+      Tags: "{{ ntfy_tags | default('rocket') }}"
+      Authorization: "Basic {{ (ntfy_user | default('admin') ~ ':' ~ ntfy_password) | b64encode }}"
+    body: "{{ ntfy_body }}"
+    body_format: raw
+    status_code: [200, 201, 204]
+  when: ntfy_enabled | default(false) | bool
+  ignore_errors: true
+  no_log: true

@@ -1,0 +1,11 @@
+---
+galaxy_info:
+  role_name: manifest_deploy
+  namespace: appelshaeuser
+  author: Simon Appelshaeuser
+  description: >-
+    Geteilte, manifest-getriebene Deploy-Bausteine (Stack-Discovery, Env/Config-Rendering,
+    Repo-Sync, ntfy-Notifications) fuer homelab und hetzner-vps.
+  license: MIT
+  min_ansible_version: "2.15"
+dependencies: []

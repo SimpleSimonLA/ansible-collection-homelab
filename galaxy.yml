@@ -1,0 +1,19 @@
+namespace: appelshaeuser
+name: stacks
+version: 0.1.0
+readme: README.md
+authors:
+  - Simon Appelshaeuser
+description: >-
+  Geteilte, manifest-getriebene Deploy-Logik fuer die homelab- und hetzner-vps-Repos
+  (Stack-Discovery, Env/Config-Rendering, Repo-Sync, ntfy-Notifications).
+license:
+  - MIT
+tags:
+  - infrastructure
+  - docker
+  - deployment
+repository: https://github.com/SimpleSimonLA/ansible-collection-appelshaeuser
+build_ignore:
+  - .git
+  - .gitignore

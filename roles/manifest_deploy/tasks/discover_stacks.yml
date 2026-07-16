@@ -1,0 +1,93 @@
+---
+# Findet und laedt alle Stack-Manifeste (stacks/<name>/deploy.meta.yml) vom
+# Zielhost ein und baut daraus die sortierte Liste `managed_stacks`.
+# Aufruf: include_role name=appelshaeuser.stacks.manifest_deploy tasks_from=discover_stacks
+# Vars: stacks_root (Pflicht). Optional: only_stacks (Extra-Var-Filter).
+#
+# Ergebnis:
+#   managed_stacks       – Liste von Dicts, sortiert nach `order` (dann `name`),
+#                          plus `name` (Verzeichnisname) und `dir` (absoluter Pfad).
+#   managed_stack_names  – reine Namensliste.
+#
+# Warum find+slurp statt lookup('file'): Die Manifeste liegen auf dem ZIELHOST
+# (ausgechecktes Repo), nicht auf dem Controller.
+- name: Discover stack manifests on target host
+  ansible.builtin.find:
+    paths: "{{ stacks_root }}"
+    patterns: "deploy.meta.yml"
+    recurse: yes
+    depth: 2
+    file_type: file
+  register: stack_manifests
+
+# Verzeichnisse mit fuehrendem Unterstrich (z. B. stacks/_templates/) sind
+# Vorlagen/Hilfsordner und keine echten Stacks -> herausfiltern.
+- name: Ignore template/helper manifests (directories starting with "_")
+  ansible.builtin.set_fact:
+    stack_manifest_files: >-
+      {{ stack_manifests.files
+         | rejectattr('path', 'search', '/_[^/]*/deploy.meta.yml$')
+         | list }}
+
+- name: Read stack manifest contents
+  ansible.builtin.slurp:
+    src: "{{ item.path }}"
+  loop: "{{ stack_manifest_files }}"
+  loop_control:
+    label: "{{ item.path | dirname | basename }}"
+  register: stack_manifest_contents
+
+- name: Assemble managed stack metadata
+  ansible.builtin.set_fact:
+    managed_stacks: >-
+      {{ (managed_stacks | default([])) + [
+           {'order': 500}
+           | combine(item.content | b64decode | from_yaml)
+           | combine({
+               'name': item.source | dirname | basename,
+               'dir': item.source | dirname
+             })
+         ] }}
+  loop: "{{ stack_manifest_contents.results }}"
+  loop_control:
+    label: "{{ item.source | dirname | basename }}"
+
+- name: Abort if no managed stacks were discovered
+  ansible.builtin.assert:
+    that:
+      - managed_stacks is defined
+      - managed_stacks | length > 0
+    fail_msg: >-
+      No deploy.meta.yml manifests were found under {{ stacks_root }}.
+
+- name: Sort managed stacks by order, then name
+  ansible.builtin.set_fact:
+    managed_stacks: "{{ managed_stacks | sort(attribute='name') | sort(attribute='order') }}"
+
+# Optionaler Filter fuer gezielte Einzel-Stack-Laeufe:
+#   -e '{"only_stacks":["<name>"]}'
+- name: Restrict to requested stacks (only_stacks)
+  when: only_stacks | default([]) | length > 0
+  block:
+    - name: Abort if only_stacks references an unknown stack
+      ansible.builtin.assert:
+        that:
+          - only_stacks | difference(managed_stacks | map(attribute='name') | list) | length == 0
+        fail_msg: >-
+          only_stacks enthaelt unbekannte Stacks:
+          {{ only_stacks | difference(managed_stacks | map(attribute='name') | list) | join(', ') }}.
+          Verfuegbar: {{ managed_stacks | map(attribute='name') | join(', ') }}
+
+    - name: Apply only_stacks filter
+      ansible.builtin.set_fact:
+        managed_stacks: "{{ managed_stacks | selectattr('name', 'in', only_stacks) | list }}"
+
+- name: Expose managed stack names
+  ansible.builtin.set_fact:
+    managed_stack_names: "{{ managed_stacks | map(attribute='name') | list }}"
+
+- name: Show discovered stacks
+  ansible.builtin.debug:
+    msg: >-
+      Managed stacks ({{ managed_stacks | length }}):
+      {{ managed_stacks | map(attribute='name') | join(', ') }}

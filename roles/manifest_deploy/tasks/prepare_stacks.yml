@@ -1,0 +1,79 @@
+---
+# Rendert manifest-deklarierte Dateien und legt Data-Verzeichnisse an.
+# Aufruf: include_role name=appelshaeuser.stacks.manifest_deploy tasks_from=prepare_stacks
+# Erwartet managed_stacks (aus discover_stacks) + Vault geladen.
+#
+# Parametrisiert (role-defaults, pro Repo gesetzt):
+#   env_in_repo           – true: .env in <stack>/.env (homelab);
+#                           false: nach services_config_root/<name>/<name>.env (hetzner)
+#   services_config_root  – Basis fuer absolute Config (nur bei env_in_repo=false)
+#   config_owner/group    – Owner der gerenderten Configs/Dirs (homelab simon, hetzner root)
+#   manifest_templates_dir – absoluter Pfad zu den *.j2 (Default {{ playbook_dir }}/templates)
+#
+# Manifest-Felder: env_template, env_dest?, render_files[], data_dirs[], touch_files[]
+
+# Nur bei absoluter Config-Ablage (hetzner): Basis-Config-Dir je Stack anlegen.
+- name: Ensure base service-config directory exists for every stack
+  ansible.builtin.file:
+    path: "{{ services_config_root }}/{{ item.name }}"
+    state: directory
+    owner: "{{ config_owner }}"
+    group: "{{ config_group }}"
+    mode: '0755'
+  loop: "{{ managed_stacks }}"
+  loop_control:
+    label: "{{ item.name }}"
+  when: not (env_in_repo | bool)
+
+- name: Ensure stack data directories exist with correct ownership
+  ansible.builtin.file:
+    path: "{{ item.1.path }}"
+    state: directory
+    owner: "{{ item.1.owner | default(config_owner) }}"
+    group: "{{ item.1.group | default(config_group) }}"
+    mode: "{{ item.1.mode | default('0755') }}"
+    recurse: "{{ item.1.recurse | default(false) }}"
+  loop: "{{ managed_stacks | subelements('data_dirs', skip_missing=True) }}"
+  loop_control:
+    label: "{{ item.0.name }}: {{ item.1.path }}"
+
+- name: Render .env files for stacks that declare one
+  ansible.builtin.template:
+    src: "{{ manifest_templates_dir }}/{{ item.env_template }}"
+    dest: >-
+      {{ item.env_dest
+         | default( (item.dir ~ '/.env') if (env_in_repo | bool)
+                    else (services_config_root ~ '/' ~ item.name ~ '/' ~ item.name ~ '.env') ) }}
+    owner: "{{ config_owner }}"
+    group: "{{ config_group }}"
+    mode: '0600'
+  loop: "{{ managed_stacks | selectattr('env_template', 'defined') | list }}"
+  loop_control:
+    label: "{{ item.name }}"
+  no_log: true
+
+- name: Render additional config files declared by stacks
+  ansible.builtin.template:
+    src: "{{ manifest_templates_dir }}/{{ item.1.src }}"
+    dest: "{{ (item.0.dir ~ '/' ~ item.1.dest) if (env_in_repo | bool) else item.1.dest }}"
+    owner: "{{ item.1.owner | default(config_owner) }}"
+    group: "{{ item.1.group | default(config_group) }}"
+    mode: "{{ item.1.mode | default('0600') }}"
+  loop: "{{ managed_stacks | subelements('render_files', skip_missing=True) }}"
+  loop_control:
+    label: "{{ item.0.name }}: {{ item.1.dest }}"
+  no_log: true
+
+# Leere/vordefinierte Dateien mit fixen Rechten (z. B. Traefiks acme.json).
+# copy+force:no legt sie nur an, wenn sie fehlen -> bestehende Inhalte bleiben.
+- name: Ensure declared files exist with correct permissions
+  ansible.builtin.copy:
+    dest: "{{ item.1.path }}"
+    content: "{{ item.1.content | default('') }}"
+    owner: "{{ item.1.owner | default(config_owner) }}"
+    group: "{{ item.1.group | default(config_group) }}"
+    mode: "{{ item.1.mode | default('0600') }}"
+    force: no
+  loop: "{{ managed_stacks | subelements('touch_files', skip_missing=True) }}"
+  loop_control:
+    label: "{{ item.0.name }}: {{ item.1.path }}"
