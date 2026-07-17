@@ -1,6 +1,6 @@
 ---
 # Synchronisiert das Repo auf dem Zielhost auf repo_branch (Default main).
-# Aufruf: include_role name=appelshaeuser.stacks.manifest_deploy tasks_from=sync_repo
+# Aufruf: include_role name=homelab.stacks.manifest_deploy tasks_from=sync_repo
 # Vars: repo_url, repo_dest (Pflicht); repo_branch, repo_key_file, repo_become_user (optional).
 #
 # repo_branch steuert den auszucheckenden Ref (Default main; Semaphore-Auto-Deploy).

@@ -1,6 +1,6 @@
 ---
 # Wiederverwendbarer ntfy-Notify-Task.
-# Aufruf: include_role name=appelshaeuser.stacks.manifest_deploy tasks_from=notify_ntfy
+# Aufruf: include_role name=homelab.stacks.manifest_deploy tasks_from=notify_ntfy
 #   vars:
 #     ntfy_title: "Deploy gestartet"
 #     ntfy_body:  "..."

@@ -1,4 +1,4 @@
-# appelshaeuser.stacks
+# homelab.stacks
 
 Geteilte, **manifest-getriebene** Deploy-Logik für die Repos `homelab` und
 `hetzner-vps`. Enthält die Rolle **`manifest_deploy`** mit vier wiederverwendbaren
@@ -10,9 +10,9 @@ In der `collections/requirements.yml` des jeweiligen Repos:
 
 ```yaml
 collections:
-  - name: git+https://github.com/SimpleSimonLA/ansible-collection-appelshaeuser.git
+  - name: git+https://github.com/SimpleSimonLA/ansible-collection-homelab.git
     type: git
-    version: v0.1.0    # auf Tag pinnen (nicht main)
+    version: v0.2.0    # auf Tag pinnen (nicht main)
 ```
 
 Dann (Controller-seitig; Semaphore macht das als Vorstufe):
@@ -35,7 +35,7 @@ Aufruf via `include_role` mit `tasks_from`:
 ```yaml
 - name: Discover managed stacks
   ansible.builtin.include_role:
-    name: appelshaeuser.stacks.manifest_deploy
+    name: homelab.stacks.manifest_deploy
     tasks_from: discover_stacks
   vars:
     stacks_root: "{{ my_stacks_root }}"

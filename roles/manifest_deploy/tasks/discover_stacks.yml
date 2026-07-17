@@ -1,7 +1,7 @@
 ---
 # Findet und laedt alle Stack-Manifeste (stacks/<name>/deploy.meta.yml) vom
 # Zielhost ein und baut daraus die sortierte Liste `managed_stacks`.
-# Aufruf: include_role name=appelshaeuser.stacks.manifest_deploy tasks_from=discover_stacks
+# Aufruf: include_role name=homelab.stacks.manifest_deploy tasks_from=discover_stacks
 # Vars: stacks_root (Pflicht). Optional: only_stacks (Extra-Var-Filter).
 #
 # Ergebnis:

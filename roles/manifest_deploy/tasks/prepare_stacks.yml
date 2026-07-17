@@ -1,6 +1,6 @@
 ---
 # Rendert manifest-deklarierte Dateien und legt Data-Verzeichnisse an.
-# Aufruf: include_role name=appelshaeuser.stacks.manifest_deploy tasks_from=prepare_stacks
+# Aufruf: include_role name=homelab.stacks.manifest_deploy tasks_from=prepare_stacks
 # Erwartet managed_stacks (aus discover_stacks) + Vault geladen.
 #
 # Parametrisiert (role-defaults, pro Repo gesetzt):

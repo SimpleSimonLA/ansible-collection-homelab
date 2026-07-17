@@ -1,8 +1,8 @@
 ---
 galaxy_info:
   role_name: manifest_deploy
-  namespace: appelshaeuser
-  author: Simon Appelshaeuser
+  namespace: homelab
+  author: SimpleSimonLA
   description: >-
     Geteilte, manifest-getriebene Deploy-Bausteine (Stack-Discovery, Env/Config-Rendering,
     Repo-Sync, ntfy-Notifications) fuer homelab und hetzner-vps.
