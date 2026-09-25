@@ -1,0 +1,162 @@
+---
+# push-Modus von sync_repo: der Controller schiebt seinen Checkout auf den Zielhost.
+#
+# WARUM: Zieht der Zielhost seinen Code selbst von einem Git-Server, der auf
+# genau diesem Host laeuft (Forgejo auf dem VPS), entsteht ein Zirkel — ein
+# Deploy, der Forgejo zerlegt, kann seinen eigenen Fix nicht mehr holen. Im
+# push-Modus braucht der Zielhost ueberhaupt keinen Git-Server: was deployt wird,
+# ist der Stand, den der Controller (Semaphore oder ein lokaler Klon) ohnehin
+# schon hat. Break-Glass = jeder lokale Klon + ansible-playbook.
+#
+# ABLAUF:
+#   1. Controller: Commit + Tree von repo_push_ref (Default HEAD) bestimmen.
+#      Uncommittete Aenderungen an getrackten Dateien brechen ab — `git archive`
+#      nimmt nur Committetes mit, ein "gefixt, aber nicht deployt" waere sonst still.
+#   2. Zielhost: Marker repo_dest/.deploy-rev lesen. Gleicher Tree -> nichts tun.
+#   3. Sonst: `git archive` -> repo_dest.new entpacken -> Marker schreiben ->
+#      Verzeichnis tauschen. Der Tausch sorgt dafuer, dass im Repo geloeschte
+#      Dateien (z. B. ein entfernter Stack-Ordner) auch auf dem Host verschwinden.
+#      Voraussetzung: nichts Laufzeitrelevantes liegt in repo_dest selbst
+#      (Configs/Daten gehoeren nach services_config_root).
+#
+# Vars: repo_dest (Pflicht); repo_src_dir (Default playbook_dir, irgendwo im
+# Checkout), repo_push_ref (Default HEAD), repo_push_allow_dirty (Default false).
+- name: Resolve controller-side checkout, commit and tree
+  ansible.builtin.command:
+    argv:
+      - git
+      - -C
+      - "{{ repo_src_dir }}"
+      - rev-parse
+      - --show-toplevel
+      - "{{ repo_push_ref }}^{commit}"
+      - "{{ repo_push_ref }}^{tree}"
+  delegate_to: localhost
+  become: false
+  run_once: true
+  check_mode: false
+  changed_when: false
+  register: repo_push_rev_parse
+
+- name: Remember controller-side revision
+  ansible.builtin.set_fact:
+    repo_push_toplevel: "{{ repo_push_rev_parse.stdout_lines[0] }}"
+    repo_push_commit: "{{ repo_push_rev_parse.stdout_lines[1] }}"
+    repo_push_tree: "{{ repo_push_rev_parse.stdout_lines[2] }}"
+
+- name: Check controller checkout for uncommitted changes
+  ansible.builtin.command:
+    argv: [git, -C, "{{ repo_push_toplevel }}", status, --porcelain, --untracked-files=no]
+  delegate_to: localhost
+  become: false
+  run_once: true
+  check_mode: false
+  changed_when: false
+  register: repo_push_dirty
+
+- name: Abort on uncommitted changes (they would not be deployed)
+  ansible.builtin.assert:
+    that:
+      - (repo_push_dirty.stdout | trim | length == 0) or (repo_push_allow_dirty | bool)
+    fail_msg: >-
+      Der Checkout {{ repo_push_toplevel }} hat uncommittete Aenderungen an getrackten
+      Dateien. Deployt wird nur {{ repo_push_ref }} ({{ repo_push_commit[:12] }}) —
+      erst committen (Push ist nicht noetig) oder -e repo_push_allow_dirty=true setzen.
+      {{ repo_push_dirty.stdout_lines | join(', ') }}
+    quiet: true
+
+- name: Read deployed revision marker on target host
+  ansible.builtin.slurp:
+    src: "{{ repo_dest }}/.deploy-rev"
+  register: repo_push_marker
+  failed_when: false
+
+- name: Decide whether the target host needs a new tree
+  ansible.builtin.set_fact:
+    repo_push_deployed: >-
+      {{ (repo_push_marker.content | b64decode | from_json)
+         if (repo_push_marker.content is defined) else {} }}
+
+- name: Show sync decision
+  ansible.builtin.debug:
+    msg: >-
+      {{ repo_dest }}: deployt {{ repo_push_deployed.commit[:12] if repo_push_deployed.commit is defined else '— (kein Marker)' }},
+      Controller {{ repo_push_commit[:12] }}
+      {{ '-> unveraendert' if repo_push_deployed.tree | default('') == repo_push_tree else '-> wird uebertragen' }}
+
+- name: Push repository tree to target host
+  when:
+    - repo_push_deployed.tree | default('') != repo_push_tree
+    - not ansible_check_mode
+  block:
+    - name: Create local temporary archive path
+      ansible.builtin.tempfile:
+        state: file
+        suffix: .tar.gz
+      delegate_to: localhost
+      become: false
+      run_once: true
+      register: repo_push_archive
+
+    # tar.umask=0022: git archive schreibt sonst 0664/0775.
+    - name: Build archive of the commit on the controller
+      ansible.builtin.command:
+        argv:
+          - git
+          - -C
+          - "{{ repo_push_toplevel }}"
+          - -c
+          - tar.umask=0022
+          - archive
+          - --format=tar.gz
+          - --output={{ repo_push_archive.path }}
+          - "{{ repo_push_commit }}"
+      delegate_to: localhost
+      become: false
+      run_once: true
+      changed_when: false
+
+    - name: Remove leftover staging directory
+      ansible.builtin.file:
+        path: "{{ repo_dest }}.new"
+        state: absent
+
+    - name: Create staging directory
+      ansible.builtin.file:
+        path: "{{ repo_dest }}.new"
+        state: directory
+        mode: '0755'
+
+    - name: Unpack archive into staging directory
+      ansible.builtin.unarchive:
+        src: "{{ repo_push_archive.path }}"
+        dest: "{{ repo_dest }}.new"
+
+    - name: Write revision marker
+      ansible.builtin.copy:
+        dest: "{{ repo_dest }}.new/.deploy-rev"
+        content: "{{ {'commit': repo_push_commit, 'tree': repo_push_tree} | to_nice_json }}\n"
+        mode: '0644'
+
+    - name: Swap staging directory into place
+      ansible.builtin.command:
+        argv:
+          - sh
+          - -euc
+          - |
+            rm -rf "$1.prev"
+            if [ -e "$1" ]; then mv "$1" "$1.prev"; fi
+            mv "$1.new" "$1"
+            rm -rf "$1.prev"
+          - sync_repo_push
+          - "{{ repo_dest }}"
+
+  always:
+    - name: Remove local temporary archive
+      ansible.builtin.file:
+        path: "{{ repo_push_archive.path }}"
+        state: absent
+      delegate_to: localhost
+      become: false
+      run_once: true
+      when: repo_push_archive.path is defined

@@ -1,32 +1,54 @@
 ---
-# Synchronisiert das Repo auf dem Zielhost auf repo_branch (Default main).
+# Bringt den Repo-Stand auf den Zielhost. Zwei Modi (repo_sync_mode):
+#
+#   git  (Default) – der Zielhost zieht selbst per `git` von repo_url (homelab).
+#   push           – der Controller schiebt den Stand aus seinem eigenen Checkout
+#                    per `git archive` auf den Zielhost; dort liegt dann eine
+#                    reine Arbeitskopie ohne .git (hetzner-vps). Siehe sync_repo_push.yml.
+#
 # Aufruf: include_role name=homelab.stacks.manifest_deploy tasks_from=sync_repo
-# Vars: repo_url, repo_dest (Pflicht); repo_branch, repo_key_file, repo_become_user (optional).
+# Vars git:  repo_url, repo_dest (Pflicht); repo_branch, repo_key_file, repo_become_user (optional).
+# Vars push: repo_dest (Pflicht); repo_src_dir, repo_push_ref, repo_push_allow_dirty (optional).
 #
 # repo_branch steuert den auszucheckenden Ref (Default main; Semaphore-Auto-Deploy).
 # Fuer kontrollierte Pre-Merge-Testlaeufe eines Feature-Branches per Extra-Var:
 #   -e repo_branch=feat/mein-branch
-- name: Ensure repository exists on target host
-  ansible.builtin.stat:
-    path: "{{ repo_dest }}"
-  register: manifest_repo_stat
-
-- name: Abort if repository is missing on target host
+# (Im push-Modus stattdessen den Branch lokal auschecken — es geht raus, was HEAD ist.)
+- name: Validate repo_sync_mode
   ansible.builtin.assert:
     that:
-      - manifest_repo_stat.stat.exists
-      - manifest_repo_stat.stat.isdir
-    fail_msg: >-
-      Repository was not found at {{ repo_dest }} on the target host.
-      Erst-Provisionierung ausfuehren.
+      - repo_sync_mode in ['git', 'push']
+    fail_msg: "repo_sync_mode muss 'git' oder 'push' sein, ist aber '{{ repo_sync_mode }}'."
+    quiet: true
 
-- name: Sync repository to requested version (default main)
-  ansible.builtin.git:
-    repo: "{{ repo_url }}"
-    dest: "{{ repo_dest }}"
-    version: "{{ repo_branch | default('main') }}"
-    key_file: "{{ repo_key_file | default(omit) }}"
-    accept_hostkey: yes
-    update: yes
-    force: yes
-  become_user: "{{ repo_become_user | default(omit) }}"
+- name: Sync repository by pushing from the controller
+  ansible.builtin.include_tasks: sync_repo_push.yml
+  when: repo_sync_mode == 'push'
+
+- name: Sync repository via git on the target host
+  when: repo_sync_mode == 'git'
+  block:
+    - name: Ensure repository exists on target host
+      ansible.builtin.stat:
+        path: "{{ repo_dest }}"
+      register: manifest_repo_stat
+
+    - name: Abort if repository is missing on target host
+      ansible.builtin.assert:
+        that:
+          - manifest_repo_stat.stat.exists
+          - manifest_repo_stat.stat.isdir
+        fail_msg: >-
+          Repository was not found at {{ repo_dest }} on the target host.
+          Erst-Provisionierung ausfuehren.
+
+    - name: Sync repository to requested version (default main)
+      ansible.builtin.git:
+        repo: "{{ repo_url }}"
+        dest: "{{ repo_dest }}"
+        version: "{{ repo_branch | default('main') }}"
+        key_file: "{{ repo_key_file | default(omit) }}"
+        accept_hostkey: yes
+        update: yes
+        force: yes
+      become_user: "{{ repo_become_user | default(omit) }}"

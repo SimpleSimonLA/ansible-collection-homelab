@@ -5,8 +5,16 @@
 # stacks_root: (PFLICHT) Pfad zum stacks/-Verzeichnis auf dem Zielhost.
 
 # --- sync_repo ---
-# repo_url, repo_dest: (PFLICHT)
+# repo_dest: (PFLICHT); repo_url: (PFLICHT nur im git-Modus)
+# git  = Zielhost zieht selbst per git (homelab);
+# push = Controller schiebt seinen Checkout per git archive (hetzner-vps).
+repo_sync_mode: git
 repo_branch: main
+# push-Modus: irgendein Pfad im Controller-Checkout, zu deployender Ref, und ob
+# uncommittete Aenderungen an getrackten Dateien toleriert werden.
+repo_src_dir: "{{ playbook_dir }}"
+repo_push_ref: HEAD
+repo_push_allow_dirty: false
 # repo_key_file:     (optional) SSH-Deploy-Key fuer den git-Checkout
 # repo_become_user:  (optional) User fuer den git-Checkout (z. B. homelab: simon)
 
