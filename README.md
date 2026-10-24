@@ -12,7 +12,7 @@ In der `collections/requirements.yml` des jeweiligen Repos:
 collections:
   - name: git+https://github.com/SimpleSimonLA/ansible-collection-homelab.git
     type: git
-    version: v0.4.0    # auf Tag pinnen (nicht main)
+    version: v0.5.0    # auf Tag pinnen (nicht main)
 ```
 
 Dann (Controller-seitig; Semaphore macht das als Vorstufe):
@@ -49,6 +49,7 @@ Aufruf via `include_role` mit `tasks_from`:
 | `repo_branch` | `main` | Auszucheckender Ref im `git`-Modus (Override: `-e repo_branch=…`) |
 | `repo_src_dir` / `repo_push_ref` | `{{ playbook_dir }}` / `HEAD` | `push`: Controller-Checkout und zu deployender Ref |
 | `repo_push_allow_dirty` | `false` | `push`: uncommittete Änderungen an getrackten Dateien tolerieren (werden **nicht** mit deployt) |
+| `repo_push_method` | `swap` | `push`: `swap` tauscht das Verzeichnis aus, `rsync` gleicht es an Ort und Stelle ab. `rsync` nehmen, sobald Container etwas aus `repo_dest` bind-mounten: nach einem `swap` ist ein gemounteter Ordner im Container leer. |
 | `repo_key_file` / `repo_become_user` | omit | optionaler Deploy-Key / git-User |
 | `env_in_repo` | `true` | `.env` in `<stack>/.env` (homelab) vs. `services_config_root/<n>/<n>.env` (hetzner) |
 | `services_config_root` | `/opt/services-config` | Basis für absolute Config (nur `env_in_repo=false`) |

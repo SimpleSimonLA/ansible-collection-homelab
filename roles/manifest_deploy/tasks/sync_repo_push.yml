@@ -20,7 +20,14 @@
 #      (Configs/Daten gehoeren nach services_config_root).
 #
 # Vars: repo_dest (Pflicht); repo_src_dir (Default playbook_dir, irgendwo im
-# Checkout), repo_push_ref (Default HEAD), repo_push_allow_dirty (Default false).
+# Checkout), repo_push_ref (Default HEAD), repo_push_allow_dirty (Default false),
+# repo_push_method (Default swap; rsync fuer Repos mit Bind-Mounts aus repo_dest).
+- name: Validate repo_push_method
+  ansible.builtin.assert:
+    that: repo_push_method in ['swap', 'rsync']
+    fail_msg: "repo_push_method muss 'swap' oder 'rsync' sein, nicht '{{ repo_push_method }}'."
+    quiet: true
+
 - name: Resolve controller-side checkout, commit and tree
   ansible.builtin.command:
     argv:
@@ -138,7 +145,32 @@
         content: "{{ {'commit': repo_push_commit, 'tree': repo_push_tree} | to_nice_json }}\n"
         mode: '0644'
 
+    # Zwei Methoden, das Staging-Verzeichnis an seinen Platz zu bringen:
+    #   swap  (Default): Verzeichnis tauschen. Sauber und atomar, aber jeder
+    #         Bind-Mount eines Containers auf einen Pfad in repo_dest zeigt danach
+    #         ins Leere -- ein gemounteter Ordner ist im Container LEER, eine
+    #         gemountete Datei behaelt den alten Stand (2026-10-24 auf der
+    #         Agent-VM nachgestellt). Fuer Repos, die nichts aus repo_dest mounten.
+    #   rsync: an Ort und Stelle abgleichen (`rsync --delete`). Unveraenderte
+    #         Dateien behalten ihre Inodes, Mounts bleiben intakt -- wie bei
+    #         `git pull`. Per `.gitignore` ignorierte Dateien (gerenderte .env,
+    #         Keys) werden weder ueberschrieben noch geloescht. Braucht rsync auf
+    #         dem Zielhost.
+    - name: Sync staging directory into place (rsync, in place)
+      ansible.builtin.command:
+        argv:
+          - sh
+          - -euc
+          - |
+            mkdir -p "$1"
+            rsync -a --delete --filter=':- .gitignore' "$1.new/" "$1/"
+            rm -rf "$1.new"
+          - sync_repo_push
+          - "{{ repo_dest }}"
+      when: repo_push_method == 'rsync'
+
     - name: Swap staging directory into place
+      when: repo_push_method == 'swap'
       ansible.builtin.command:
         argv:
           - sh

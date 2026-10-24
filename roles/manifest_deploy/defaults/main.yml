@@ -20,6 +20,9 @@ repo_branch: main
 repo_src_dir: "{{ playbook_dir }}"
 repo_push_ref: HEAD
 repo_push_allow_dirty: false
+# swap: Verzeichnis tauschen (bricht Bind-Mounts aus repo_dest);
+# rsync: an Ort und Stelle abgleichen, .gitignore-Dateien bleiben (braucht rsync).
+repo_push_method: swap
 # repo_key_file:     (optional) SSH-Deploy-Key fuer den git-Checkout
 # repo_become_user:  (optional) User fuer den git-Checkout (z. B. homelab: simon)
 
