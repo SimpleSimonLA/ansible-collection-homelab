@@ -12,7 +12,7 @@ In der `collections/requirements.yml` des jeweiligen Repos:
 collections:
   - name: git+https://github.com/SimpleSimonLA/ansible-collection-homelab.git
     type: git
-    version: v0.2.0    # auf Tag pinnen (nicht main)
+    version: v0.4.0    # auf Tag pinnen (nicht main)
 ```
 
 Dann (Controller-seitig; Semaphore macht das als Vorstufe):
@@ -55,6 +55,7 @@ Aufruf via `include_role` mit `tasks_from`:
 | `config_owner` / `config_group` | `root` | Owner gerenderter Configs/Dirs (homelab: `simon`) |
 | `manifest_templates_dir` | `{{ playbook_dir }}/templates` | absoluter Pfad zu den `*.j2` |
 | `ntfy_enabled` / `ntfy_user` | `false` / `admin` | ntfy an/aus + Basic-Auth-User |
+| `stack_host` / `stack_host_default` | `''` / `''` | Host-Filter für `discover_stacks`: nur Manifeste mit `host: <stack_host>`, Manifeste ohne `host:` zählen zu `stack_host_default`. Leer = kein Filter. Ein Host ohne passende Stacks ergibt eine leere Liste, keinen Fehler. |
 
 ## `push`-Modus
 

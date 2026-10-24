@@ -4,6 +4,11 @@
 # --- discover_stacks ---
 # stacks_root: (PFLICHT) Pfad zum stacks/-Verzeichnis auf dem Zielhost.
 
+# Host-Filter: nur Stacks mit `host: <stack_host>` im Manifest; Manifeste ohne
+# `host:` gehoeren zu stack_host_default. Leer = kein Filter (altes Verhalten).
+stack_host: ''
+stack_host_default: ''
+
 # --- sync_repo ---
 # repo_dest: (PFLICHT); repo_url: (PFLICHT nur im git-Modus)
 # git  = Zielhost zieht selbst per git (homelab);

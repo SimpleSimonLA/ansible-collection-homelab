@@ -2,7 +2,8 @@
 # Findet und laedt alle Stack-Manifeste (stacks/<name>/deploy.meta.yml) vom
 # Zielhost ein und baut daraus die sortierte Liste `managed_stacks`.
 # Aufruf: include_role name=homelab.stacks.manifest_deploy tasks_from=discover_stacks
-# Vars: stacks_root (Pflicht). Optional: only_stacks (Extra-Var-Filter).
+# Vars: stacks_root (Pflicht). Optional: only_stacks (Extra-Var-Filter),
+#       stack_host + stack_host_default (Host-Filter, s. u.).
 #
 # Ergebnis:
 #   managed_stacks       – Liste von Dicts, sortiert nach `order` (dann `name`),
@@ -63,6 +64,27 @@
 - name: Sort managed stacks by order, then name
   ansible.builtin.set_fact:
     managed_stacks: "{{ managed_stacks | sort(attribute='name') | sort(attribute='order') }}"
+
+# Optionaler Host-Filter fuer Repos, deren Stacks auf mehreren Hosts laufen:
+# Jedes Manifest kann `host: <name>` tragen, ohne Feld gilt stack_host_default.
+# Ist stack_host leer (Default), bleibt alles wie vorher -- Repos ohne
+# Mehr-Host-Betrieb (hetzner-vps) setzen nichts.
+# Bewusst NACH dem Leer-Check oben: der prueft, dass ueberhaupt Manifeste da
+# sind. Dass auf einem Host nach dem Filter null Stacks uebrig bleiben, ist
+# dagegen legitim (neuer Host, Umzug noch nicht durch).
+- name: Restrict to stacks of this host (stack_host)
+  ansible.builtin.set_fact:
+    managed_stacks: >-
+      {{ managed_stacks
+         | selectattr('host', 'defined') | selectattr('host', 'equalto', stack_host) | list
+         + (managed_stacks | rejectattr('host', 'defined') | list
+            if stack_host == stack_host_default else []) }}
+  when: stack_host | default('') | length > 0
+
+- name: Re-sort after host filter
+  ansible.builtin.set_fact:
+    managed_stacks: "{{ managed_stacks | sort(attribute='name') | sort(attribute='order') }}"
+  when: stack_host | default('') | length > 0
 
 # Optionaler Filter fuer gezielte Einzel-Stack-Laeufe:
 #   -e '{"only_stacks":["<name>"]}'
